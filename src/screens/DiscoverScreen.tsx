@@ -1,35 +1,51 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MiniPulseBars } from '../components/MiniPulseBars';
-import { usePulse } from '../context/PulseContext';
+import { usePulse, type LoggedEvent } from '../context/PulseContext';
 import { THEMED_EVENTS } from '../lib/data';
 import { crowdMatchScore, rankFakeFriends } from '../lib/crowdMatch';
 import { rankThemedEventsForUser } from '../lib/eventRec';
+import type { TasteSummary } from '../lib/pulse';
 import type { DiscoverStackParamList } from '../navigation/types';
 import { colors, font } from '../theme';
 
 type Props = NativeStackScreenProps<DiscoverStackParamList, 'DiscoverMain'>;
 
+type DiscoverSegment = 'friends' | 'events';
+
+/** Pulse + taste from saved Home shows only — not the in-progress Log tab session */
+function useSavedProfileSummary(loggedEvents: LoggedEvent[]) {
+  return useMemo(() => {
+    const completed = loggedEvents.filter((e) => e.pulseSignature && e.pulseSignature.length > 0);
+    if (completed.length === 0) {
+      return {
+        pulse: null as number[] | null,
+        taste: null as TasteSummary | null,
+        hasSavedShows: false,
+      };
+    }
+    const latest = [...completed].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return {
+      pulse: latest.pulseSignature,
+      taste: latest.tasteSummary,
+      hasSavedShows: true,
+    };
+  }, [loggedEvents]);
+}
+
 export function DiscoverScreen({ navigation }: Props) {
-  const { pulseSignature, tasteSummary, loggedEvents } = usePulse();
+  const { loggedEvents } = usePulse();
+  const [segment, setSegment] = useState<DiscoverSegment>('friends');
 
-  const effectivePulse =
-    pulseSignature ??
-    loggedEvents.find((e) => e.pulseSignature && e.pulseSignature.length)?.pulseSignature ??
-    null;
+  const { pulse: profilePulse, taste: profileTaste, hasSavedShows } = useSavedProfileSummary(loggedEvents);
 
-  const effectiveTaste =
-    tasteSummary ??
-    loggedEvents.find((e) => e.tasteSummary)?.tasteSummary ??
-    null;
+  const rankedFriends = useMemo(() => rankFakeFriends(profilePulse), [profilePulse]);
 
-  const rankedFriends = useMemo(() => rankFakeFriends(effectivePulse), [effectivePulse]);
-
-  const eventsPreview = useMemo(
-    () => rankThemedEventsForUser(effectivePulse, effectiveTaste, THEMED_EVENTS).slice(0, 4),
-    [effectivePulse, effectiveTaste]
+  const rankedEvents = useMemo(
+    () => rankThemedEventsForUser(profilePulse, profileTaste, THEMED_EVENTS),
+    [profilePulse, profileTaste]
   );
 
   return (
@@ -37,76 +53,108 @@ export function DiscoverScreen({ navigation }: Props) {
       <StatusBar style="light" />
       <Text style={[styles.title, font('bold')]}>Discover</Text>
       <Text style={[styles.sub, font('regular')]}>
-        Demo profiles with their own pulse shapes. Match % is how close their energy pattern is to yours — tap
-        someone to compare side by side.
+        Picks here use your saved shows on Home — not the event you&apos;re logging in the Log tab. That flow
+        has its own crowd match and event list at the end.
       </Text>
 
-      <Text style={[styles.section, font('semibold')]}>Friends</Text>
-
-      {!effectivePulse ? (
-        <Text style={[styles.muted, font('regular')]}>
-          No pulse in memory — complete a relive flow with taps to see match % (you can still open profiles at
-          0%).
-        </Text>
-      ) : (
-        <View style={styles.hero}>
-          <Text style={[styles.heroLabel, font('medium')]}>Your pulse</Text>
-          <MiniPulseBars vector={effectivePulse} barCount={28} />
-        </View>
-      )}
-
-      {rankedFriends.map((u) => (
+      <View style={styles.segmentRow}>
         <Pressable
-          key={u.id}
-          style={({ pressed }) => [styles.friendCard, pressed && { opacity: 0.9 }]}
-          onPress={() => navigation.navigate('FriendPulseDetail', { friendId: u.id })}
+          style={[styles.segmentBtn, segment === 'friends' && styles.segmentBtnActive]}
+          onPress={() => setSegment('friends')}
         >
-          <View style={[styles.avatar, { backgroundColor: u.avatarColor }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.name, font('semibold')]}>{u.name}</Text>
-            <Text style={[styles.match, font('bold')]}>{crowdMatchScore(effectivePulse, u)}% similar energy</Text>
-            <Text style={[styles.reason, font('regular')]} numberOfLines={2}>
-              {u.tagline}
-            </Text>
-          </View>
-          <Text style={[styles.chev, font('medium')]}>›</Text>
+          <Text style={[styles.segmentText, font('semibold'), segment === 'friends' && styles.segmentTextActive]}>
+            Friend recommendations
+          </Text>
         </Pressable>
-      ))}
+        <Pressable
+          style={[styles.segmentBtn, segment === 'events' && styles.segmentBtnActive]}
+          onPress={() => setSegment('events')}
+        >
+          <Text style={[styles.segmentText, font('semibold'), segment === 'events' && styles.segmentTextActive]}>
+            Events
+          </Text>
+        </Pressable>
+      </View>
 
-      <Text style={[styles.section, font('semibold')]}>Events · taste fit</Text>
-      <Text style={[styles.hint, font('regular')]}>
-        Event scores are 1–10 taste fit — each line explains the vibe in plain language.
-      </Text>
+      {segment === 'friends' ? (
+        <>
+          <Text style={[styles.section, font('semibold')]}>Crowd you might vibe with</Text>
+          {!hasSavedShows ? (
+            <Text style={[styles.muted, font('regular')]}>
+              Finish logging a show on the Log tab and tap Done so it appears on Home — then we can rank demo
+              friends against your saved pulse. You can still open profiles at 0% to preview shapes.
+            </Text>
+          ) : (
+            <View style={styles.hero}>
+              <Text style={[styles.heroLabel, font('medium')]}>Your pulse (from latest saved show)</Text>
+              {profilePulse && profilePulse.length > 0 ? (
+                <MiniPulseBars vector={profilePulse} barCount={28} />
+              ) : (
+                <Text style={[styles.muted, font('regular')]}>No signature on file.</Text>
+              )}
+            </View>
+          )}
 
-      {eventsPreview.map((e) => (
-        <View key={e.id} style={styles.eventCard}>
-          <View style={styles.eventTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.artist, font('bold')]}>{e.artist}</Text>
-              <Text style={[styles.meta, font('regular')]}>{e.venue}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.score, font('bold')]}>{e.scoreOutOf10.toFixed(1)}</Text>
-              <Text style={[styles.meta, font('regular')]}>/ 10</Text>
-            </View>
-          </View>
-          <Text style={[styles.eventBlurb, font('regular')]}>{e.scoreDescription}</Text>
-          <View style={styles.tagRow}>
-            {e.genres.map((g) => (
-              <View key={g} style={styles.tag}>
-                <Text style={[styles.tagText, font('medium')]}>{g}</Text>
+          {rankedFriends.map((u) => (
+            <Pressable
+              key={u.id}
+              style={({ pressed }) => [styles.friendCard, pressed && { opacity: 0.9 }]}
+              onPress={() => navigation.navigate('FriendPulseDetail', { friendId: u.id })}
+            >
+              <View style={[styles.avatar, { backgroundColor: u.avatarColor }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.name, font('semibold')]}>{u.name}</Text>
+                <Text style={[styles.match, font('bold')]}>{crowdMatchScore(profilePulse, u)}% similar energy</Text>
+                <Text style={[styles.reason, font('regular')]} numberOfLines={2}>
+                  {u.tagline}
+                </Text>
               </View>
-            ))}
-          </View>
-          <View style={styles.tagRow}>
-            {e.vibes.map((v) => (
-              <View key={v} style={[styles.tag, styles.tagVibe]}>
-                <Text style={[styles.tagText, font('medium')]}>{v}</Text>
+              <Text style={[styles.chev, font('medium')]}>›</Text>
+            </Pressable>
+          ))}
+        </>
+      ) : (
+        <>
+          <Text style={[styles.section, font('semibold')]}>Events · taste fit</Text>
+          <Text style={[styles.hint, font('regular')]}>
+            Scores reflect your saved profile on Home (pulse + refine tags), not tonight&apos;s draft session.
+          </Text>
+          {!hasSavedShows ? (
+            <Text style={[styles.muted, font('regular')]}>
+              Save a completed log to Home first — then we can suggest themed nights that fit your stored taste.
+            </Text>
+          ) : null}
+          {rankedEvents.map((e) => (
+            <View key={e.id} style={styles.eventCard}>
+              <View style={styles.eventTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.artist, font('bold')]}>{e.artist}</Text>
+                  <Text style={[styles.meta, font('regular')]}>{e.venue}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.score, font('bold')]}>{e.scoreOutOf10.toFixed(1)}</Text>
+                  <Text style={[styles.meta, font('regular')]}>/ 10</Text>
+                </View>
               </View>
-            ))}
-          </View>
-        </View>
-      ))}
+              <Text style={[styles.eventBlurb, font('regular')]}>{e.scoreDescription}</Text>
+              <View style={styles.tagRow}>
+                {e.genres.map((g) => (
+                  <View key={g} style={styles.tag}>
+                    <Text style={[styles.tagText, font('medium')]}>{g}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.tagRow}>
+                {e.vibes.map((v) => (
+                  <View key={v} style={[styles.tag, styles.tagVibe]}>
+                    <Text style={[styles.tagText, font('medium')]}>{v}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -115,8 +163,29 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 20, paddingBottom: 40 },
   title: { color: colors.text, fontSize: 22, marginBottom: 6 },
-  sub: { color: colors.muted, fontSize: 14, marginBottom: 18, lineHeight: 20 },
-  section: { color: colors.text, fontSize: 17, marginTop: 8, marginBottom: 10 },
+  sub: { color: colors.muted, fontSize: 13, marginBottom: 16, lineHeight: 19 },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: '#2a3148',
+    alignItems: 'center',
+  },
+  segmentBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(255,46,99,0.12)',
+  },
+  segmentText: { color: colors.muted, fontSize: 13, textAlign: 'center' },
+  segmentTextActive: { color: colors.text },
+  section: { color: colors.text, fontSize: 17, marginTop: 4, marginBottom: 10 },
   hero: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -124,7 +193,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   heroLabel: { color: colors.muted, fontSize: 11, marginBottom: 8, textTransform: 'uppercase' },
-  muted: { color: colors.muted, fontSize: 14, marginBottom: 12 },
+  muted: { color: colors.muted, fontSize: 14, marginBottom: 12, lineHeight: 20 },
   friendCard: {
     flexDirection: 'row',
     gap: 12,

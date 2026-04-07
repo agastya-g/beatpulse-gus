@@ -1,4 +1,3 @@
-import { CommonActions, useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -12,19 +11,10 @@ type Props = NativeStackScreenProps<LogStackParamList, 'FriendMatch'>;
 
 export function FriendMatchScreen({ navigation }: Props) {
   const { pulseSignature } = usePulse();
-  const rootNav = useNavigation();
   const crowd = rankFakeFriends(pulseSignature);
 
   const openFriendDetail = (friendId: string) => {
-    rootNav.dispatch(
-      CommonActions.navigate({
-        name: 'Discover',
-        params: {
-          screen: 'FriendPulseDetail',
-          params: { friendId },
-        },
-      })
-    );
+    navigation.navigate('FriendPulseDetail', { friendId, flow: 'log' });
   };
 
   return (
@@ -32,8 +22,8 @@ export function FriendMatchScreen({ navigation }: Props) {
       <StatusBar style="light" />
       <Text style={[styles.title, font('bold')]}>Crowd resonance</Text>
       <Text style={[styles.sub, font('regular')]}>
-        Demo crowd with their own pulse shapes. Match % is how similar their energy is to yours — open Discover
-        anytime to compare waveforms in detail.
+        Demo crowd with their own pulse shapes. Match % is how similar their energy is to yours — tap someone for a
+        side-by-side compare, then use back to return here and continue to event recommendations.
       </Text>
 
       <Pressable style={styles.backRow} onPress={() => navigation.goBack()}>

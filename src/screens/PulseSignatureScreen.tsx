@@ -1,21 +1,31 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { PulseChart } from '../components/PulseChart';
 import { usePulse } from '../context/PulseContext';
-import { buildTasteSummary, insightLines } from '../lib/pulse';
+import { recapInsightLines, recapTasteLines } from '../lib/pulse';
 import type { LogStackParamList } from '../navigation/types';
 import { colors, font } from '../theme';
 
 type Props = NativeStackScreenProps<LogStackParamList, 'PulseSignature'>;
 
 export function PulseSignatureScreen({ navigation }: Props) {
-  const { pulseSignature, pulseWaveform, tasteSummary, audioDurationSec, persistActiveEventOutcome } =
-    usePulse();
+  const { pulseSignature, pulseWaveform, audioDurationSec, persistActiveEventOutcome } = usePulse();
   const { width } = useWindowDimensions();
   const sig = pulseSignature;
-  const summary = tasteSummary ?? buildTasteSummary(sig);
-  const insights = insightLines(sig);
+
+  const [recapSeed, setRecapSeed] = useState(() => Math.floor(Math.random() * 0x7fffffff));
+
+  useFocusEffect(
+    useCallback(() => {
+      setRecapSeed((prev) => (prev + Math.floor(Math.random() * 0xfffffff) + 1) >>> 0);
+    }, [])
+  );
+
+  const tasteLines = recapTasteLines(sig, recapSeed);
+  const insights = recapInsightLines(sig, recapSeed);
   const total = audioDurationSec;
   const m = Math.floor(total / 60);
   const s = Math.floor(total % 60);
@@ -65,8 +75,8 @@ export function PulseSignatureScreen({ navigation }: Props) {
       )}
 
       <Text style={[styles.insHead, font('semibold')]}>How you listen</Text>
-      {summary.lines.map((line, i) => (
-        <View key={`${i}-${line.slice(0, 12)}`} style={styles.pill}>
+      {tasteLines.map((line, i) => (
+        <View key={`${recapSeed}-${i}-${line.slice(0, 16)}`} style={styles.pill}>
           <View style={styles.dot} />
           <Text style={[styles.pillText, font('regular')]}>{line}</Text>
         </View>

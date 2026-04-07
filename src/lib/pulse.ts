@@ -202,6 +202,252 @@ export function pulseToPreferenceTags(sig: number[]): string[] {
   return Array.from(tags);
 }
 
+function rngFromSeed(seed: number): () => number {
+  let s = (seed >>> 0) || 1;
+  return () => {
+    s += 0x6d2b79f5;
+    let t = Math.imul(s ^ (s >>> 15), s | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pickVariant<T>(rand: () => number, options: T[]): T {
+  const i = Math.floor(rand() * options.length) % options.length;
+  return options[i]!;
+}
+
+/**
+ * Display-only recap lines for Pulse signature UI — varies with `seed` (e.g. each time the screen is opened).
+ * Stored `tasteSummary` / tags stay deterministic via {@link buildTasteSummary}.
+ */
+export function recapTasteLines(sig: number[] | null, seed: number): string[] {
+  const rng = rngFromSeed(seed);
+  if (!sig) {
+    return [
+      pickVariant(rng, [
+        'No pulse captured — you skipped tapping or left before engaging.',
+        'No taps on record this time — we keep the recap honest instead of guessing.',
+        'You stepped back before tapping — come back when you want a fingerprint.',
+      ]),
+    ];
+  }
+
+  const energy = sig[0] ?? 0;
+  const irregularity = sig[1] ?? 0;
+  const rhythm = sig[2] ?? 0;
+  const burstiness = sig[3] ?? 0;
+  const chaos = sig[6] ?? 0.5;
+  const dark = sig[7] ?? 0.5;
+  const pred = sig[8] ?? 0.5;
+
+  const lines: string[] = [];
+
+  if (burstiness > 0.55 && energy > 0.5) {
+    lines.push(
+      pickVariant(rng, [
+        'You chase drops — quick hits when the tension releases.',
+        'Build-and-release hooks you — you spike when the tension finally snaps.',
+        'You lean into impact moments — the payoff hits harder than the climb for you.',
+        'When the bottom drops, you answer — peak energy is where you show up.',
+      ])
+    );
+  } else if (energy > 0.65) {
+    lines.push(
+      pickVariant(rng, [
+        'High engagement — you ride the loud moments hard.',
+        'You live in the peaks — volume and motion pull the most taps.',
+        'Louder and busier stretches get the lion’s share of your attention.',
+        'The big moments own your hands — you commit when the room goes wide open.',
+      ])
+    );
+  } else if (energy < 0.3) {
+    lines.push(
+      pickVariant(rng, [
+        'Sparse taps — you absorb more than you punch.',
+        'You listen in patches — reactions show up like punctuation, not a wall.',
+        'Quiet stretches dominate — you tap like highlights, not a constant thread.',
+        'Selective energy — you touch the set when something really lands.',
+      ])
+    );
+  } else {
+    lines.push(
+      pickVariant(rng, [
+        'Balanced pacing — you react throughout the set, not just peaks.',
+        'You spread attention across the arc — not only drops, not only downtime.',
+        'Mid-range engagement — you’re present in more than one chapter of the night.',
+        'Your taps trace the whole ride — peaks and pockets both get love.',
+      ])
+    );
+  }
+
+  if (rhythm > 0.58) {
+    lines.push(
+      pickVariant(rng, [
+        'Singalong-friendly moments pull you in — melody and chants matter.',
+        'Hooks and vocals snag you — when the crowd can shout it, you feel it.',
+        'Earworm sections win — catchy phrases line up with your taps.',
+        'Melodic lifts register — you lean in when the topline takes the wheel.',
+      ])
+    );
+  } else if (irregularity > 0.55) {
+    lines.push(
+      pickVariant(rng, [
+        'You respond to surprises — less predictable sections hook you.',
+        'Left turns keep you curious — weird transitions earn your taps.',
+        'When the arrangement zigzags, you notice — novelty beats autopilot.',
+        'Unscripted moments spark you — the set that wanders keeps you awake.',
+      ])
+    );
+  } else {
+    lines.push(
+      pickVariant(rng, [
+        'Steady rhythm — you lock into a groove once it lands.',
+        'You find a pocket and stay — consistency beats whiplash for you.',
+        'Once the groove sets, you ride it — repetition feels grounding.',
+        'Stable sections feel like home — you commit when the loop feels honest.',
+      ])
+    );
+  }
+
+  if (chaos > 0.58) {
+    lines.push(
+      pickVariant(rng, [
+        'Chaos leans exciting — messy transitions feel alive to you.',
+        'Rough edges feel honest — a little disorder reads as energy.',
+        'You like when the mix gets unruly — polish isn’t the only thrill.',
+        'Controlled mayhem speaks to you — the room wobbling is part of the fun.',
+      ])
+    );
+  } else if (chaos < 0.42) {
+    lines.push(
+      pickVariant(rng, [
+        'Structure matters — clean builds and releases are your comfort zone.',
+        'You prefer arcs you can read — clear sections beat murky drift.',
+        'Tidy arrangements land — when the DJ spells it out, you lean in.',
+        'Defined phrases help you settle — you like knowing what chapter you’re in.',
+      ])
+    );
+  }
+
+  if (dark > 0.55) {
+    lines.push(
+      pickVariant(rng, [
+        'Darker timbres resonate — you like weight and tension in the low end.',
+        'Heavy sonics pull you — grit and rumble feel expensive.',
+        'Shadowy textures fit — you’re drawn to moody, cavernous moments.',
+        'The moody side of the spectrum sticks — bleak can still feel huge.',
+      ])
+    );
+  } else if (dark < 0.42) {
+    lines.push(
+      pickVariant(rng, [
+        'Bright & uplifting textures fit your pulse — euphoria over dread.',
+        'Air and light in the mix win — you tilt toward the hopeful side.',
+        'Lift and shine register — major-key energy matches your pattern.',
+        'You lean sunny — when the track opens up, your taps say yes.',
+      ])
+    );
+  }
+
+  if (pred > 0.58) {
+    lines.push(
+      pickVariant(rng, [
+        'Predictable arcs feel safe — you enjoy knowing where the lift lands.',
+        'Familiar song shapes comfort you — the payoff lands where you expect.',
+        'You like when the narrative is clear — setup and payoff in plain sight.',
+        'Classic tension–release still hits — tradition isn’t boring to you.',
+      ])
+    );
+  } else if (pred < 0.42) {
+    lines.push(
+      pickVariant(rng, [
+        'You reward unpredictability — left turns keep you tapping.',
+        'Subverted expectations earn you — the twist is part of the rush.',
+        'When the DJ swerves, you answer — surprise is a feature, not a bug.',
+        'You enjoy not knowing the map — the detours are where you show up.',
+      ])
+    );
+  }
+
+  return lines.slice(0, 5);
+}
+
+/** Display-only tap-pattern bullets; varies with `seed`. */
+export function recapInsightLines(sig: number[] | null, seed: number): string[] {
+  if (!sig) return [];
+  const rng = rngFromSeed(seed ^ 0x9e3779b9);
+  const energy = sig[0] ?? 0;
+  const irregularity = sig[1] ?? 0;
+  const burstiness = sig[3] ?? 0;
+  const chaos = sig[6] ?? 0.5;
+  const lines: string[] = [];
+  const pct = Math.round(chaos * 100);
+
+  if (energy > 0.65) {
+    lines.push(
+      pickVariant(rng, [
+        'Strong spikes during high-energy moments',
+        'Big reactions when the track swells or slams',
+        'Your densest clusters line up with the loudest sections',
+      ])
+    );
+  } else if (energy < 0.28) {
+    lines.push(
+      pickVariant(rng, [
+        'Calm, sparse tap pattern — reflective listening',
+        'Light touch on the pad — you sample the set more than you hammer it',
+        'Plenty of breathing room between reactions',
+      ])
+    );
+  } else {
+    lines.push(
+      pickVariant(rng, [
+        'Balanced energy across the session',
+        'Taps spread across the timeline — not all front-loaded or back-loaded',
+        'Mid-level activity most of the way through',
+      ])
+    );
+  }
+
+  if (burstiness > 0.55) {
+    lines.push(
+      pickVariant(rng, [
+        'Burst-heavy tapping — quick hits clustered together',
+        'Rapid-fire clusters — you punch in short flurries',
+        'Micro-bursts show up — quick hands in tight windows',
+      ])
+    );
+  } else if (irregularity > 0.55) {
+    lines.push(
+      pickVariant(rng, [
+        'High variability in mid-range transitions',
+        'Spacing between taps shifts a lot — less metronome, more conversation',
+        'Uneven gaps — your rhythm follows the story, not a grid',
+      ])
+    );
+  } else {
+    lines.push(
+      pickVariant(rng, [
+        'Steady rhythmic engagement',
+        'Even, repeatable spacing between taps',
+        'Your tap cadence stays fairly even once you lock in',
+      ])
+    );
+  }
+
+  lines.push(
+    pickVariant(rng, [
+      `${pct}% weight toward chaotic vs structured vibe`,
+      `About ${pct}% tilt toward wild, messy energy over tight structure`,
+      `Chaos–structure blend skews ~${pct}% toward the untamed side`,
+      `Your pattern reads ~${pct}% “let it rip” versus “keep it locked”`,
+    ])
+  );
+
+  return lines.slice(0, 3);
+}
+
 export function buildTasteSummary(sig: number[] | null): TasteSummary {
   if (!sig) {
     return {

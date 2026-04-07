@@ -6,6 +6,8 @@ export type LogStackParamList = {
   RefineVibe: undefined;
   PulseSignature: undefined;
   FriendMatch: undefined;
+  /** Same compare UI as Discover; stays on Log stack so back returns to crowd match */
+  FriendPulseDetail: { friendId: string; flow?: 'log' };
   EventRecommendations: undefined;
 };
 
@@ -15,7 +17,7 @@ export type HomeStackParamList = {
 
 export type DiscoverStackParamList = {
   DiscoverMain: undefined;
-  FriendPulseDetail: { friendId: string };
+  FriendPulseDetail: { friendId: string; flow?: 'log' };
 };
 
 export type ProfileStackParamList = {

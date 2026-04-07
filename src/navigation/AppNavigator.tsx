@@ -72,6 +72,11 @@ function LogStackNavigator() {
       />
       <LogStack.Screen name="FriendMatch" component={FriendMatchScreen} options={{ title: 'Crowd match' }} />
       <LogStack.Screen
+        name="FriendPulseDetail"
+        component={FriendPulseDetailScreen}
+        options={{ title: 'Compare pulse' }}
+      />
+      <LogStack.Screen
         name="EventRecommendations"
         component={EventRecommendationsScreen}
         options={{ title: 'Events for you' }}
@@ -82,7 +87,7 @@ function LogStackNavigator() {
 
 function DiscoverStackNavigator() {
   return (
-    <DiscoverStack.Navigator screenOptions={stackScreenOpts}>
+    <DiscoverStack.Navigator initialRouteName="DiscoverMain" screenOptions={stackScreenOpts}>
       <DiscoverStack.Screen
         name="DiscoverMain"
         component={DiscoverScreen}

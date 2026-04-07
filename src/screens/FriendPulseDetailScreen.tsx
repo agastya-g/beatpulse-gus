@@ -1,19 +1,66 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { MaterialIcons } from '@expo/vector-icons';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useLayoutEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { MiniPulseBars } from '../components/MiniPulseBars';
 import { PulseChart } from '../components/PulseChart';
 import { usePulse } from '../context/PulseContext';
 import { explainFriendMatch, getFakeFriend } from '../lib/fakeFriends';
-import type { DiscoverStackParamList } from '../navigation/types';
+import type { DiscoverStackParamList, LogStackParamList } from '../navigation/types';
 import { colors, font } from '../theme';
 
-type Props = NativeStackScreenProps<DiscoverStackParamList, 'FriendPulseDetail'>;
+type Props =
+  | NativeStackScreenProps<LogStackParamList, 'FriendPulseDetail'>
+  | NativeStackScreenProps<DiscoverStackParamList, 'FriendPulseDetail'>;
 
 export function FriendPulseDetailScreen({ route, navigation }: Props) {
-  const { friendId } = route.params;
+  const { friendId, flow } = route.params;
+  const fromLogFlow = flow === 'log';
+
+  const goBack = useCallback(() => {
+    if (fromLogFlow) {
+      navigation.goBack();
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    (navigation as NativeStackNavigationProp<DiscoverStackParamList>).navigate('DiscoverMain');
+  }, [fromLogFlow, navigation]);
+
+  const backLabel = fromLogFlow ? '← Back to crowd match' : '← Back to Discover';
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <Pressable
+          onPress={goBack}
+          accessibilityRole="button"
+          accessibilityLabel={fromLogFlow ? 'Back to crowd match' : 'Back to Discover'}
+          hitSlop={12}
+          style={{ marginLeft: 4, padding: 8 }}
+        >
+          <MaterialIcons name="arrow-back" size={24} color={colors.text} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, goBack, fromLogFlow]);
+
   const friend = getFakeFriend(friendId);
-  const { pulseSignature, pulseWaveform } = usePulse();
+  const { pulseSignature, pulseWaveform, loggedEvents } = usePulse();
+
+  const latestSaved = useMemo(() => {
+    const done = loggedEvents.filter((e) => e.pulseSignature && e.pulseSignature.length > 0);
+    if (!done.length) return null;
+    return [...done].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  }, [loggedEvents]);
+
+  /** Discover compares against saved Home profile; Log flow uses the active session */
+  const viewerSig = fromLogFlow ? pulseSignature : (latestSaved?.pulseSignature ?? pulseSignature);
+  const viewerWave = fromLogFlow ? pulseWaveform : (latestSaved?.pulseWaveform ?? pulseWaveform);
+
   const { width } = useWindowDimensions();
   const chartW = Math.min(width - 40, 360);
 
@@ -21,7 +68,7 @@ export function FriendPulseDetailScreen({ route, navigation }: Props) {
     return (
       <View style={styles.root}>
         <StatusBar style="light" />
-        <Pressable style={styles.backRow} onPress={() => navigation.goBack()}>
+        <Pressable style={styles.backRow} onPress={goBack}>
           <Text style={[styles.backText, font('medium')]}>← Back</Text>
         </Pressable>
         <Text style={[styles.err, font('regular')]}>Friend not found.</Text>
@@ -29,13 +76,13 @@ export function FriendPulseDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const explain = explainFriendMatch(pulseSignature, friend);
+  const explain = explainFriendMatch(viewerSig, friend);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <StatusBar style="light" />
-      <Pressable style={styles.backRow} onPress={() => navigation.goBack()}>
-        <Text style={[styles.backText, font('medium')]}>← Back to Discover</Text>
+      <Pressable style={styles.backRow} onPress={goBack}>
+        <Text style={[styles.backText, font('medium')]}>{backLabel}</Text>
       </Pressable>
 
       <Text style={[styles.title, font('bold')]}>{friend.name}</Text>
@@ -43,13 +90,19 @@ export function FriendPulseDetailScreen({ route, navigation }: Props) {
 
       <Text style={[styles.section, font('semibold')]}>Your tap waveform</Text>
       <Text style={[styles.caption, font('regular')]}>
-        Where you tapped along the track — flat stretches mean no taps there.
+        {fromLogFlow
+          ? 'Where you tapped along the track — flat stretches mean no taps there.'
+          : 'From your most recent saved show on Home — flat stretches mean no taps there.'}
       </Text>
       <View style={styles.card}>
-        {pulseWaveform && pulseWaveform.length > 1 ? (
-          <PulseChart waveform={pulseWaveform} width={chartW} height={120} />
+        {viewerWave && viewerWave.length > 1 ? (
+          <PulseChart waveform={viewerWave} width={chartW} height={120} />
         ) : (
-          <Text style={[styles.muted, font('regular')]}>No waveform in memory — finish a tap session first.</Text>
+          <Text style={[styles.muted, font('regular')]}>
+            {fromLogFlow
+              ? 'No waveform in memory — finish a tap session first.'
+              : 'No saved waveform yet — finish a log flow and save to Home.'}
+          </Text>
         )}
       </View>
 
@@ -63,8 +116,8 @@ export function FriendPulseDetailScreen({ route, navigation }: Props) {
       <View style={styles.rowCompare}>
         <View style={styles.half}>
           <Text style={[styles.miniLab, font('medium')]}>You</Text>
-          {pulseSignature?.length ? (
-            <MiniPulseBars vector={pulseSignature} barCount={28} />
+          {viewerSig?.length ? (
+            <MiniPulseBars vector={viewerSig} barCount={28} />
           ) : (
             <Text style={[styles.muted, font('regular')]}>—</Text>
           )}
