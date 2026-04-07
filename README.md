@@ -98,4 +98,4 @@ git push origin main
 Private coursework / team project — confirm license with the repo owners before redistribution.
 
 ## AI Use
-Used ChatGPT and GitHub Copilot during implementation to assistance with debugging, structural componenets, and guidance on handling audio playback and event-driven logic:
+Used ChatGPT and GitHub Copilot during implementation to generate a portion of the code, assistance with debugging, structural components, and guidance on handling audio playback and event-driven logic.
