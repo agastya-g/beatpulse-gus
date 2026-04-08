@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Hello Tech Demo",
+    "slug": "hello-tech-demo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark"
+  }
+}
